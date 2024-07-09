@@ -1,7 +1,7 @@
 # main.py
 import os
 from transkribus import authenticate, upload_document, request_handwritten_recognition, get_recognition_results, download_recognized_text, wait_for_completion, train_model, request_text_detection
-from config import USERNAME, PASSWORD, COLLECTION_ID
+from config import USERNAME, PASSWORD, COLLECTION_ID, TRAINING_IMAGE_DIR, TRAINING_TRANSCRIPTION_DIR
 
 def main():
     # Authenticate with Transkribus
