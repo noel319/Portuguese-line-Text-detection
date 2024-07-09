@@ -3,7 +3,7 @@ import requests
 import time
 import os
 
-from config import USERNAME, PASSWORD, BASE_URL, COLLECTION_ID, MODEL_NAME, TRAINING_IMAGE_DIR, TRAINING_TRANSCRIPTION_DIR
+from config import BASE_URL, COLLECTION_ID, MODEL_NAME
 
 def authenticate(username, password):
     url = f"{BASE_URL}/auth/login"
@@ -27,7 +27,8 @@ def upload_document(session_id, file_path, collection_id):
 def request_handwritten_recognition(session_id, doc_id, page_ids):
     url = f"{BASE_URL}/jobs/{doc_id}/{page_ids}/textrecognition/htr"
     headers = {'Cookie': f"JSESSIONID={session_id}"}
-    response = requests.post(url, headers=headers)
+    params = {'lang': 'por'}
+    response = requests.post(url, headers=headers, params=params)
     if response.status_code == 200:
         return response.json()
     else:
