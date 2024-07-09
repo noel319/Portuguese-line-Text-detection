@@ -1,64 +1,49 @@
-import pandas as pd
-import torch
-from torch.utils.data import Dataset
-from PIL import Image
+# main.py
+import os
+from transkribus import authenticate, upload_document, request_handwritten_recognition, get_recognition_results, download_recognized_text, wait_for_completion, train_model, request_text_detection
+from config import USERNAME, PASSWORD, COLLECTION_ID
 
-df = pd.read_fwf('/content/drive/MyDrive/TrOCR/Tutorial notebooks/IAM/gt_test.txt', header=None)
-df.rename(columns={0: "file_name", 1: "text"}, inplace=True)
-del df[2]
-df.head()
+def main():
+    # Authenticate with Transkribus
+    session_id = authenticate(USERNAME, PASSWORD)
+    print(f"Authenticated successfully, session ID: {session_id}")
 
-from sklearn.model_selection import train_test_split
+    # Define paths
+    input_path = os.path.join('input', 'sample_document.png')
+    output_path = os.path.join('output', 'recognized_text.txt')
 
-train_df, test_df = train_test_split(df, test_size=0.2)
-# we reset the indices to start from zero
-train_df.reset_index(drop=True, inplace=True)
-test_df.reset_index(drop=True, inplace=True)
+    # Upload document
+    upload_response = upload_document(session_id, input_path, COLLECTION_ID)
+    print(f"Document uploaded successfully, response: {upload_response}")
 
-import torch
-from torch.utils.data import Dataset
-from PIL import Image
+    doc_id = upload_response['docId']
+    page_ids = ','.join([str(page['pageId']) for page in upload_response['pages']])
 
-class IAMDataset(Dataset):
-    def __init__(self, root_dir, df, processor, max_target_length=128):
-        self.root_dir = root_dir
-        self.df = df
-        self.processor = processor
-        self.max_target_length = max_target_length
+    # Request text detection
+    text_detection_response = request_text_detection(session_id, doc_id, page_ids)
+    print(f"Text detection requested successfully, response: {text_detection_response}")
 
-    def __len__(self):
-        return len(self.df)
+    job_id = text_detection_response['jobId']
+    wait_for_completion(session_id, job_id)
 
-    def __getitem__(self, idx):
-        # get file name + text 
-        file_name = self.df['file_name'][idx]
-        text = self.df['text'][idx]
-        # prepare image (i.e. resize + normalize)
-        image = Image.open(self.root_dir + file_name).convert("RGB")
-        pixel_values = self.processor(image, return_tensors="pt").pixel_values
-        # add labels (input_ids) by encoding the text
-        labels = self.processor.tokenizer(text, 
-                                          padding="max_length", 
-                                          max_length=self.max_target_length).input_ids
-        # important: make sure that PAD tokens are ignored by the loss function
-        labels = [label if label != self.processor.tokenizer.pad_token_id else -100 for label in labels]
+    # Request handwritten recognition
+    recognition_response = request_handwritten_recognition(session_id, doc_id, page_ids)
+    print(f"Handwritten recognition requested successfully, response: {recognition_response}")
 
-        encoding = {"pixel_values": pixel_values.squeeze(), "labels": torch.tensor(labels)}
-        return encoding
-from transformers import TrOCRProcessor
+    job_id = recognition_response['jobId']
+    wait_for_completion(session_id, job_id)
 
-processor = TrOCRProcessor.from_pretrained("microsoft/trocr-base-handwritten")
-train_dataset = IAMDataset(root_dir='/content/drive/MyDrive/TrOCR/Tutorial notebooks/IAM/image/',
-                           df=train_df,
-                           processor=processor)
-eval_dataset = IAMDataset(root_dir='/content/drive/MyDrive/TrOCR/Tutorial notebooks/IAM/image/',
-                           df=test_df,
-                           processor=processor)
-print("Number of training examples:", len(train_dataset))
-print("Number of validation examples:", len(eval_dataset))
+    # Retrieve recognition results
+    results = get_recognition_results(session_id, doc_id)
+    print(f"Recognition results retrieved successfully")
 
-encoding = train_dataset[0]
-for k,v in encoding.items():
-  print(k, v.shape)
-image = Image.open(train_dataset.root_dir + train_df['file_name'][0]).convert("RGB")
-   
+    # Save recognized text to output file
+    download_recognized_text(results, output_path)
+    print(f"Recognized text saved to {output_path}")
+
+    # Train the model
+    training_response = train_model(session_id, TRAINING_IMAGE_DIR, TRAINING_TRANSCRIPTION_DIR, COLLECTION_ID)
+    print(f"Model training initiated successfully, response: {training_response}")
+
+if __name__ == '__main__':
+    main()
